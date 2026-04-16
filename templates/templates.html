@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+
+{% block title %}模板管理 - 公文写作助手{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>模板管理</h1>
+    <p class="subtitle">管理公文模板文件（.docx格式）</p>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>模板列表</h2>
+        <button class="btn btn-secondary" onclick="loadTemplates()">刷新</button>
+    </div>
+    <div id="template-list" class="template-list">
+        <p class="loading">加载中...</p>
+    </div>
+</div>
+
+<div class="card">
+    <h2>上传模板</h2>
+    <div class="upload-area">
+        <form id="upload-form" class="upload-form">
+            <div class="form-group">
+                <input type="file" id="template-file" name="file" accept=".docx" class="file-input">
+                <label for="template-file" class="file-label">
+                    <span class="file-icon">+</span>
+                    <span class="file-text">选择.docx模板文件</span>
+                </label>
+                <p id="selected-file-name" class="selected-file-name"></p>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">上传模板</button>
+            </div>
+        </form>
+        <div id="upload-result" class="result-message"></div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>模板制作说明</h2>
+    <p>在Word模板中使用 <code>{{"{{"}}变量名{{"}}"}}</code> 标注占位符，例如：</p>
+    <div class="code-block">
+        <code>
+关于召开{{"{{"}}会议名称{{"}}"}}的通知<br>
+<br>
+{{"{{"}}日期{{"}}"}}<br>
+<br>
+各位同事：<br>
+<br>
+{{"{{"}}正文内容{{"}}"}}<br>
+<br>
+{{"{{"}}落款{{"}}"}}
+        </code>
+    </div>
+    <div class="info-box">
+        <h4>提示</h4>
+        <ul>
+            <li>变量名可以包含中文或英文</li>
+            <li>一个模板可以有多个变量</li>
+            <li>AI会根据内容描述自动填充每个变量</li>
+        </ul>
+    </div>
+</div>
+
+<!-- 预览模态框 -->
+<div id="preview-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="preview-title">模板预览</h2>
+            <span class="modal-close" onclick="closePreview()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <div id="preview-variables" class="preview-section">
+                <h4>变量列表</h4>
+                <div id="variable-list"></div>
+            </div>
+            <div class="preview-section">
+                <h4>内容预览</h4>
+                <div id="preview-content" class="preview-content"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% raw %}
+<script>
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+async function loadTemplates() {
+    try {
+        const response = await fetch('/api/templates');
+        const templates = await response.json();
+
+        if (!templates || templates.length === 0) {
+            document.getElementById('template-list').innerHTML =
+                '<p class="empty">暂无模板文件，请上传模板</p>';
+            return;
+        }
+
+        let html = '<table class="template-table"><thead><tr><th>文件名</th><th>大小</th><th>操作</th></tr></thead><tbody>';
+        for (const t of templates) {
+            const sizeKB = (t.size / 1024).toFixed(1);
+            html += `<tr>
+                <td class="template-name">${escapeHtml(t.name)}</td>
+                <td>${sizeKB} KB</td>
+                <td>
+                    <button class="btn-link" onclick="previewTemplate('${encodeURIComponent(t.name)}')">预览</button>
+                    <button class="btn-link" onclick="useTemplate('${encodeURIComponent(t.name)}')">使用</button>
+                    <button class="btn-link btn-delete" onclick="deleteTemplate('${encodeURIComponent(t.name)}')">删除</button>
+                </td>
+            </tr>`;
+        }
+        html += '</tbody></table>';
+        document.getElementById('template-list').innerHTML = html;
+
+    } catch (error) {
+        document.getElementById('template-list').innerHTML =
+            `<p class="error">加载失败: ${error.message}</p>`;
+    }
+}
+
+function useTemplate(name) {
+    window.location.href = `/generate?template=${encodeURIComponent(name)}`;
+}
+
+async function deleteTemplate(name) {
+    const decodedName = decodeURIComponent(name);
+    if (!confirm(`确定要删除模板 "${decodedName}" 吗？此操作不可恢复。`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/template/delete', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name: name})
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            alert(`模板 "${decodedName}" 已删除`);
+            loadTemplates();
+        } else {
+            alert('删除失败: ' + (data.error || '未知错误'));
+        }
+    } catch (error) {
+        alert('删除失败: ' + error.message);
+    }
+}
+
+async function previewTemplate(name) {
+    const modal = document.getElementById('preview-modal');
+    const title = document.getElementById('preview-title');
+    const variableList = document.getElementById('variable-list');
+    const contentDiv = document.getElementById('preview-content');
+
+    title.textContent = '模板预览 - ' + decodeURIComponent(name);
+    variableList.innerHTML = '<p class="loading">加载中...</p>';
+    contentDiv.innerHTML = '<p class="loading">加载中...</p>';
+    modal.style.display = 'block';
+
+    try {
+        const response = await fetch(`/api/template/preview?name=${encodeURIComponent(name)}`);
+        const data = await response.json();
+
+        if (data.error) {
+            variableList.innerHTML = `<p class="error">${data.error}</p>`;
+            contentDiv.innerHTML = '';
+            return;
+        }
+
+        // 显示变量
+        var openBrace = '\u007B\u007B';
+        var closeBrace = '\u007D\u007D';
+        if (data.variables && data.variables.length > 0) {
+            variableList.innerHTML = '<div class="variable-tags">' +
+                data.variables.map(function(v) { return '<span class="variable-tag">' + openBrace + v + closeBrace + '</span>'; }).join('') +
+                '</div>';
+        } else {
+            variableList.innerHTML = '<p class="info">此模板暂无变量</p>';
+        }
+
+        // 显示内容预览
+        let html = '';
+        for (const para of data.paragraphs) {
+            if (para.has_variable) {
+                // 高亮显示变量
+                let text = escapeHtml(para.text);
+                text = text.replace(/\{\{(.*?)\}\}/g, '<span class="highlight">' + openBrace + '$1' + closeBrace + '</span>');
+                html += `<p class="preview-para has-var">${text}</p>`;
+            } else {
+                html += `<p class="preview-para">${escapeHtml(para.text)}</p>`;
+            }
+        }
+
+        // 表格
+        for (const table of data.tables) {
+            html += '<table class="preview-table">';
+            for (const row of table) {
+                html += '<tr>';
+                for (const cell of row) {
+                    let text = escapeHtml(cell.text);
+                    if (cell.has_variable) {
+                        text = text.replace(/\{\{(.*?)\}\}/g, '<span class="highlight">' + openBrace + '$1' + closeBrace + '</span>');
+                    }
+                    html += `<td>${text}</td>`;
+                }
+                html += '</tr>';
+            }
+            html += '</table>';
+        }
+
+        contentDiv.innerHTML = html || '<p class="info">无法预览内容</p>';
+
+    } catch (error) {
+        variableList.innerHTML = `<p class="error">加载失败: ${error.message}</p>`;
+        contentDiv.innerHTML = '';
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function closePreview() {
+    document.getElementById('preview-modal').style.display = 'none';
+}
+
+// 点击模态框外部关闭
+window.onclick = function(event) {
+    const modal = document.getElementById('preview-modal');
+    if (event.target == modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// 文件选择显示
+document.getElementById('template-file').addEventListener('change', function(e) {
+    const fileName = e.target.files[0]?.name || '';
+    document.getElementById('selected-file-name').textContent = fileName;
+});
+
+// 上传表单提交
+document.getElementById('upload-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const fileInput = document.getElementById('template-file');
+    const file = fileInput.files[0];
+
+    if (!file) {
+        showResult('请选择文件', 'error');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    showResult('上传中...', 'info');
+
+    try {
+        const response = await fetch('/api/template/upload', {
+            method: 'POST',
+            body: formData,
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showResult(`上传成功: ${data.name}`, 'success');
+            fileInput.value = '';
+            document.getElementById('selected-file-name').textContent = '';
+            loadTemplates();
+        } else {
+            showResult(data.error || '上传失败', 'error');
+        }
+    } catch (error) {
+        showResult('上传失败: ' + error.message, 'error');
+    }
+});
+
+function showResult(message, type) {
+    const resultDiv = document.getElementById('upload-result');
+    resultDiv.className = `result-message ${type}`;
+    resultDiv.innerHTML = message;
+    resultDiv.style.display = 'block';
+}
+
+loadTemplates();
+</script>
+{% endraw %}
+{% endblock %}

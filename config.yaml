@@ -1,0 +1,13 @@
+llm:
+  default_provider: minimax
+  providers:
+    minimax:
+      api_key: sk-cp-cIkQSi8O9rzSlGngjRi-rOMDRsxatb7gi0qRfn65Y4OLTR3jgFvM8vo_QeoHjThDN_t9khmxxKtVkIVMJFCoQE9XkmpVDZve99TEuid8qA6alq542fPd5FY
+      base_url: https://api.minimaxi.com/v1
+      group_id: '2027989010684584358'
+      model: MiniMax-M2.7
+template:
+  default_variables:
+    author: 办公室
+    date: '{{CURRENT_DATE}}'
+  variable_pattern: '{{(.*?)}}'

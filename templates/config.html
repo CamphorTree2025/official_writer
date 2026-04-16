@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+
+{% block title %}API配置 - 公文写作助手{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>API配置</h1>
+    <p class="subtitle">配置大模型服务商的API密钥和模型参数</p>
+</div>
+
+<div class="card">
+    <h2>当前配置</h2>
+    <div id="config-info" class="config-info">
+        <p class="loading">加载中...</p>
+    </div>
+</div>
+
+<div class="card">
+    <h2>编辑配置</h2>
+    <form id="config-form" class="config-form">
+        <div class="form-group">
+            <label for="default-provider">默认提供商</label>
+            <select id="default-provider" name="default_provider">
+                <option value="minimax">Minimax</option>
+                <option value="glm">智谱GLM</option>
+                <option value="openai">OpenAI</option>
+            </select>
+        </div>
+
+        <div class="provider-section">
+            <h3>Minimax
+                <button type="button" class="btn-delete-provider" onclick="deleteProvider('minimax')">删除</button>
+                <button type="button" class="btn-test" onclick="testProvider('minimax')">测试</button>
+            </h3>
+            <div class="form-group">
+                <label for="minimax-group-id">Group ID</label>
+                <input type="text" id="minimax-group-id" name="minimax_group_id" placeholder="输入Group ID">
+            </div>
+            <div class="form-group">
+                <label for="minimax-api-key">API Key</label>
+                <input type="password" id="minimax-api-key" name="minimax_api_key" placeholder="输入API Key">
+            </div>
+            <div class="form-group">
+                <label for="minimax-model">模型</label>
+                <input type="text" id="minimax-model" name="minimax_model" value="abab6.5s">
+            </div>
+            <div id="minimax-test-result" class="test-result"></div>
+        </div>
+
+        <div class="provider-section">
+            <h3>智谱GLM
+                <button type="button" class="btn-delete-provider" onclick="deleteProvider('glm')">删除</button>
+                <button type="button" class="btn-test" onclick="testProvider('glm')">测试</button>
+            </h3>
+            <div class="form-group">
+                <label for="glm-api-key">API Key</label>
+                <input type="password" id="glm-api-key" name="glm_api_key" placeholder="输入API Key">
+            </div>
+            <div class="form-group">
+                <label for="glm-model">模型</label>
+                <input type="text" id="glm-model" name="glm_model" value="glm-4">
+            </div>
+            <div id="glm-test-result" class="test-result"></div>
+        </div>
+
+        <div class="provider-section">
+            <h3>OpenAI
+                <button type="button" class="btn-delete-provider" onclick="deleteProvider('openai')">删除</button>
+                <button type="button" class="btn-test" onclick="testProvider('openai')">测试</button>
+            </h3>
+            <div class="form-group">
+                <label for="openai-api-key">API Key</label>
+                <input type="password" id="openai-api-key" name="openai_api_key" placeholder="输入API Key">
+            </div>
+            <div class="form-group">
+                <label for="openai-model">模型</label>
+                <input type="text" id="openai-model" name="openai_model" value="gpt-4">
+            </div>
+            <div id="openai-test-result" class="test-result"></div>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">保存配置</button>
+            <button type="button" class="btn btn-secondary" onclick="loadConfig()">重置</button>
+        </div>
+    </form>
+    <div id="save-result" class="result-message"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% raw %}
+<script>
+async function loadConfig() {
+    try {
+        const response = await fetch('/api/config');
+        const data = await response.json();
+
+        if (data.error) {
+            showError('config-info', data.error);
+            return;
+        }
+
+        let html = `<p><strong>默认提供商：</strong>${escapeHtml(data.default_provider)}</p>`;
+        html += '<table class="provider-table"><thead><tr><th>提供商</th><th>Group ID</th><th>模型</th><th>API Key</th><th>操作</th></tr></thead><tbody>';
+        for (const p of data.providers) {
+            html += `<tr>
+                <td>${escapeHtml(p.name)}</td>
+                <td>${escapeHtml(p.group_id || '-')}</td>
+                <td>${escapeHtml(p.model)}</td>
+                <td>${p.has_key ? '✓ 已配置' : '✗ 未配置'}</td>
+                <td><button class="btn-link btn-delete" onclick="deleteProvider('${escapeHtml(p.name)}')">删除</button></td>
+            </tr>`;
+        }
+        html += '</tbody></table>';
+        document.getElementById('config-info').innerHTML = html;
+
+        // 填充表单
+        document.getElementById('default-provider').value = data.default_provider;
+
+        // 填充各provider的值
+        for (const p of data.providers) {
+            const groupIdInput = document.getElementById(p.name + '-group-id');
+            if (groupIdInput) groupIdInput.value = p.group_id || '';
+            const apiKeyInput = document.getElementById(p.name + '-api-key');
+            if (apiKeyInput) apiKeyInput.value = p.api_key || '';
+            const modelInput = document.getElementById(p.name + '-model');
+            if (modelInput) modelInput.value = p.model || '';
+        }
+
+    } catch (error) {
+        showError('config-info', '加载配置失败: ' + error.message);
+    }
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+async function testProvider(name) {
+    const groupIdInput = document.getElementById(name + '-group-id');
+    const apiKeyInput = document.getElementById(name + '-api-key');
+    const modelInput = document.getElementById(name + '-model');
+    const resultDiv = document.getElementById(name + '-test-result');
+
+    const group_id = groupIdInput ? groupIdInput.value : '';
+    const api_key = apiKeyInput ? apiKeyInput.value : '';
+    const model = modelInput ? modelInput.value : '';
+
+    if (!api_key) {
+        resultDiv.innerHTML = '<p class="error">请先填写API Key</p>';
+        return;
+    }
+
+    resultDiv.innerHTML = '<p class="loading">测试中...</p>';
+
+    try {
+        const response = await fetch('/api/config/test', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                provider: name,
+                group_id: group_id,
+                api_key: api_key,
+                model: model
+            })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            resultDiv.innerHTML = `<p class="success">✓ ${data.message}</p>`;
+        } else {
+            resultDiv.innerHTML = `<p class="error">✗ ${data.error}</p>`;
+        }
+    } catch (error) {
+        resultDiv.innerHTML = `<p class="error">✗ 测试失败: ${error.message}</p>`;
+    }
+}
+
+async function deleteProvider(name) {
+    if (!confirm('确定要删除提供商 "' + name + '" 的配置吗？')) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/config/provider/' + encodeURIComponent(name), {
+            method: 'DELETE'
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            alert('提供商 "' + name + '" 已删除');
+            loadConfig();
+        } else {
+            alert('删除失败: ' + (data.error || '未知错误'));
+        }
+    } catch (error) {
+        alert('删除失败: ' + error.message);
+    }
+}
+
+function showError(elementId, message) {
+    document.getElementById(elementId).innerHTML =
+        `<p class="error">${message}</p>`;
+}
+
+function showSuccess(elementId, message) {
+    const el = document.getElementById(elementId);
+    el.innerHTML = `<p class="success">${message}</p>`;
+    setTimeout(() => el.innerHTML = '', 5000);
+}
+
+document.getElementById('config-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const providers = {};
+    ['minimax', 'glm', 'openai'].forEach(name => {
+        providers[name] = {
+            group_id: document.getElementById(name + '-group-id')?.value || '',
+            api_key: document.getElementById(name + '-api-key')?.value || '',
+            model: document.getElementById(name + '-model')?.value || '',
+        };
+    });
+
+    try {
+        const response = await fetch('/api/config', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                default_provider: document.getElementById('default-provider').value,
+                providers: providers,
+            }),
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            showSuccess('save-result', '配置保存成功！');
+            loadConfig();
+        } else {
+            showError('save-result', result.error);
+        }
+    } catch (error) {
+        showError('save-result', '保存失败: ' + error.message);
+    }
+});
+
+loadConfig();
+</script>
+{% endraw %}
+{% endblock %}
