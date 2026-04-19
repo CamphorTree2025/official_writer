@@ -4,12 +4,36 @@
 
 {% block content %}
 <div class="page-header">
-    <h1>生成公文</h1>
+    <h1>✍️ 生成公文</h1>
     <p class="subtitle">选择模板并输入内容，AI将按照模板格式生成规范公文</p>
 </div>
 
-<div class="card">
-    <h2>选择模板</h2>
+<!-- 步骤指示器 -->
+<div class="steps" id="step-indicator">
+    <div class="step active" data-step="1">
+        <div class="step-number">1</div>
+        <div class="step-label">选择模板</div>
+    </div>
+    <div class="step-line"></div>
+    <div class="step" data-step="2">
+        <div class="step-number">2</div>
+        <div class="step-label">填写内容</div>
+    </div>
+    <div class="step-line"></div>
+    <div class="step" data-step="3">
+        <div class="step-number">3</div>
+        <div class="step-label">预览编辑</div>
+    </div>
+    <div class="step-line"></div>
+    <div class="step" data-step="4">
+        <div class="step-number">4</div>
+        <div class="step-label">生成下载</div>
+    </div>
+</div>
+
+<!-- 步骤1: 选择模板 -->
+<div id="step-1" class="card step-content">
+    <h2>📄 选择模板</h2>
     <div class="form-group">
         <label for="template-select">模板文件</label>
         <select id="template-select" name="template">
@@ -17,51 +41,137 @@
         </select>
     </div>
     <div id="variable-info" class="variable-info"></div>
+    <div class="form-actions">
+        <button type="button" class="btn btn-primary" onclick="goToStep(2)">下一步 <span>→</span></button>
+    </div>
 </div>
 
-<div class="card">
-    <h2>选择模型</h2>
+<!-- 步骤2: 填写内容 -->
+<div id="step-2" class="card step-content" style="display:none;">
+    <h2>🤖 选择模型</h2>
     <div class="form-group">
         <label for="model-select">大模型</label>
         <select id="model-select" name="model">
-            <option value="minimax">Minimax</option>
-            <option value="glm">智谱GLM</option>
+            <!-- 动态填充 -->
         </select>
+        <p class="form-hint">不同模型的生成风格有所差异，可尝试选择不同模型</p>
     </div>
-</div>
+    <div id="api-key-warning" class="info-box" style="display:none; background:var(--warning-bg, #fff3cd); border-left:3px solid var(--warning, #f0ad4e); margin-bottom:16px;">
+        <h4>⚠️ API Key 未配置</h4>
+        <p style="margin:4px 0;">当前所选模型未配置 API Key，AI 填充功能无法使用。</p>
+        <a href="/config" class="btn btn-sm btn-outline" style="margin-top:8px;">前往配置 →</a>
+    </div>
 
-<div class="card">
-    <h2>输入内容</h2>
+    <div class="divider"></div>
+
+    <!-- 填充模式选择 -->
+    <h2>🔧 填充模式</h2>
+    <div class="fill-mode-selector" style="display:flex; gap:12px; margin-bottom:16px;">
+        <label class="fill-mode-option" id="mode-strict-label" style="flex:1; cursor:pointer; padding:16px; border:2px solid var(--border); border-radius:10px; transition:all 0.2s;">
+            <input type="radio" name="fill-mode" value="strict" id="mode-strict" style="display:none;">
+            <div style="font-size:24px; margin-bottom:6px;">📌</div>
+            <div style="font-weight:700; font-size:15px; margin-bottom:4px;">严格提取</div>
+            <div style="font-size:13px; color:var(--text-3); line-height:1.5;">只从输入中提取原文，不修改任何文字。未识别的变量需手动填写。</div>
+        </label>
+        <label class="fill-mode-option" id="mode-polish-label" style="flex:1; cursor:pointer; padding:16px; border:2px solid var(--primary); border-radius:10px; transition:all 0.2s; background:var(--primary-bg, rgba(52,120,246,0.05));">
+            <input type="radio" name="fill-mode" value="polish" id="mode-polish" checked style="display:none;">
+            <div style="font-size:24px; margin-bottom:6px;">✨</div>
+            <div style="font-weight:700; font-size:15px; margin-bottom:4px;">AI 润色</div>
+            <div style="font-size:13px; color:var(--text-3); line-height:1.5;">识别输入内容并润色，缺失部分由AI自动补充，使公文更规范。</div>
+        </label>
+    </div>
+
+    <div class="divider"></div>
+
+    <h2>📝 输入内容</h2>
     <div class="form-group">
         <label for="user-input">公文内容描述</label>
         <textarea id="user-input" name="input" rows="6"
-            placeholder="请输入要生成的公文内容描述，例如：关于召开2024年度安全生产工作会议的通知"></textarea>
+            placeholder="请输入要生成的公文内容描述，例如：&#10;关于召开2024年度安全生产工作会议的通知，会议时间为12月15日，地点为公司三楼会议室，参会人员为各部门负责人"></textarea>
+        <p class="form-hint" id="input-hint">描述越详细，AI 生成的公文越精准</p>
     </div>
+
+    <!-- 快捷填充示例 -->
+    <div style="margin-bottom: 16px;">
+        <label style="font-weight:600; font-size:14px; margin-bottom:8px; display:block;">💡 快捷描述模板</label>
+        <div style="display:flex; flex-wrap:wrap; gap:6px;">
+            <button type="button" class="btn btn-sm btn-outline" onclick="fillQuick('关于召开XXX会议的通知，会议时间为X月X日，地点为XXX会议室，参会人员为各部门负责人，请准时参加')">会议通知</button>
+            <button type="button" class="btn btn-sm btn-outline" onclick="fillQuick('XXX会议纪要，会议时间X月X日，地点XXX，主持人XXX，参会人员XXX，会议议题XXX，会议决议XXX')">会议纪要</button>
+            <button type="button" class="btn btn-sm btn-outline" onclick="fillQuick('关于XXX事项的请示，因XXX原因，拟XXX，妥否请批示')">请示</button>
+            <button type="button" class="btn btn-sm btn-outline" onclick="fillQuick('关于XXX工作的报告，工作背景XXX，开展情况XXX，取得成效XXX，存在问题XXX，下一步计划XXX')">工作报告</button>
+        </div>
+    </div>
+
     <div class="form-group">
         <label for="output-name">输出文件名</label>
-        <input type="text" id="output-name" name="output_name" value="公文.docx">
+        <input type="text" id="output-name" name="output_name" value="公文.docx" placeholder="例如：关于召开会议的通知.docx">
     </div>
+
     <div class="form-actions">
-        <button type="button" class="btn btn-primary" id="btn-preview" onclick="previewVariables()">预览变量</button>
+        <button type="button" class="btn btn-secondary" onclick="goToStep(1)">← 上一步</button>
+        <button type="button" class="btn btn-primary" id="btn-preview" onclick="previewVariables()">
+            <span id="btn-preview-text">🤖 AI 预览填充</span>
+            <span id="btn-preview-spinner" style="display:none;" class="loading-spinner"></span>
+        </button>
+    </div>
+    <!-- AI 生成进度提示 -->
+    <div id="ai-progress" style="display:none; margin-top:16px; padding:16px; background:var(--bg); border-radius:8px; text-align:center;">
+        <div class="loading-spinner" style="margin:0 auto 12px;"></div>
+        <p style="font-weight:600; margin-bottom:4px;" id="ai-progress-text">🤖 AI 正在分析模板并填充变量...</p>
+        <p style="font-size:13px; color:var(--text-3);" id="ai-progress-hint">首次调用可能需要 10-30 秒，请耐心等待</p>
     </div>
 </div>
 
-<!-- 变量编辑区域 -->
-<div id="variable-edit-card" class="card" style="display:none;">
-    <h2>编辑变量内容</h2>
-    <p class="info-text">请检查并编辑以下变量的填充内容：</p>
+<!-- 步骤3: 预览编辑变量 -->
+<div id="step-3" class="card step-content" style="display:none;">
+    <h2>✏️ 编辑变量内容</h2>
+    <div id="fill-summary" style="margin-bottom:16px;"></div>
     <div id="variable-edit-list" class="variable-edit-list"></div>
     <div class="form-actions">
-        <button type="button" class="btn btn-secondary" onclick="backToInput()">返回修改</button>
-        <button type="button" class="btn btn-primary" onclick="generateDoc()">生成公文</button>
+        <button type="button" class="btn btn-secondary" onclick="goToStep(2)">← 返回修改</button>
+        <button type="button" class="btn btn-success" onclick="generateDoc()">✓ 确认生成公文</button>
     </div>
     <div id="generate-result" class="result-message"></div>
 </div>
 
-<div id="preview-card" class="card" style="display:none;">
-    <h2>生成结果</h2>
-    <div id="preview-content"></div>
+<!-- 步骤4: 生成结果 -->
+<div id="step-4" class="card step-content" style="display:none;">
+    <h2>🎉 公文生成成功！</h2>
+    <div id="result-content" style="text-align:center; padding: 20px 0;">
+        <div style="font-size:64px; margin-bottom:16px;">📄</div>
+        <p style="font-size:18px; font-weight:600; margin-bottom:8px;" id="result-filename"></p>
+        <p style="color:var(--text-2); margin-bottom:24px;">公文已生成，点击下方按钮下载</p>
+        <a id="result-download" href="#" class="btn btn-primary btn-sm" target="_blank" style="font-size:16px; padding:12px 32px;">📥 下载公文</a>
+    </div>
+    <div class="divider"></div>
+    <div class="form-actions" style="justify-content:center;">
+        <button type="button" class="btn btn-secondary" onclick="resetAll()">🔄 再生成一篇</button>
+        <button type="button" class="btn btn-outline" onclick="goToStep(3)">✏️ 继续编辑</button>
+    </div>
 </div>
+
+<style>
+/* 变量编辑项 - 来源标记样式 */
+.variable-edit-item { margin-bottom:16px; padding:16px; border:1px solid var(--border); border-radius:8px; transition:all 0.2s; }
+.variable-edit-item.source-extracted { border-left:4px solid var(--success, #10b981); background:rgba(16,185,129,0.03); }
+.variable-edit-item.source-polished { border-left:4px solid var(--primary, #3480f6); background:rgba(52,128,246,0.03); }
+.variable-edit-item.source-manual { border-left:4px solid var(--danger, #ef4444); background:rgba(239,68,68,0.05); }
+
+.variable-source-tag { display:inline-block; font-size:12px; padding:2px 8px; border-radius:4px; margin-left:8px; font-weight:500; }
+.variable-source-tag.tag-extracted { background:rgba(16,185,129,0.1); color:#059669; }
+.variable-source-tag.tag-polished { background:rgba(52,128,246,0.1); color:#2563eb; }
+.variable-source-tag.tag-manual { background:rgba(239,68,68,0.1); color:#dc2626; }
+
+/* 填充统计 */
+.fill-summary-bar { display:flex; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+.fill-summary-item { display:flex; align-items:center; gap:6px; font-size:13px; padding:4px 12px; border-radius:6px; }
+.fill-summary-item.extracted { background:rgba(16,185,129,0.1); color:#059669; }
+.fill-summary-item.polished { background:rgba(52,128,246,0.1); color:#2563eb; }
+.fill-summary-item.manual { background:rgba(239,68,68,0.1); color:#dc2626; }
+
+/* 标红提示 */
+.manual-hint { font-size:12px; color:#dc2626; margin-top:4px; }
+</style>
 {% endblock %}
 
 {% block scripts %}
@@ -70,13 +180,141 @@
 let selectedTemplate = '';
 let variables = [];
 let filledVariables = {};
+let variableSources = {};  // 存储每个变量的来源: extracted / polished / manual
+let currentStep = 1;
+let currentMode = 'polish';  // 当前填充模式
+let providerConfig = {};
 
 function escapeHtml(text) {
+    if (!text) return '';
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
 }
 
+// ===== 填充模式切换 =====
+document.querySelectorAll('input[name="fill-mode"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        currentMode = this.value;
+        updateModeUI();
+    });
+});
+
+function updateModeUI() {
+    const strictLabel = document.getElementById('mode-strict-label');
+    const polishLabel = document.getElementById('mode-polish-label');
+    const inputHint = document.getElementById('input-hint');
+
+    // 重置样式
+    [strictLabel, polishLabel].forEach(el => {
+        el.style.borderColor = 'var(--border)';
+        el.style.background = 'transparent';
+    });
+
+    if (currentMode === 'strict') {
+        strictLabel.style.borderColor = 'var(--primary)';
+        strictLabel.style.background = 'var(--primary-bg, rgba(52,120,246,0.05))';
+        inputHint.textContent = '严格模式下，AI 只提取输入中明确提及的内容，请尽量详细描述';
+    } else {
+        polishLabel.style.borderColor = 'var(--primary)';
+        polishLabel.style.background = 'var(--primary-bg, rgba(52,120,246,0.05))';
+        inputHint.textContent = '描述越详细，AI 生成的公文越精准';
+    }
+}
+
+// ===== 步骤导航 =====
+function goToStep(step) {
+    if (step === 2 && !document.getElementById('template-select').value) {
+        showToast('请先选择模板', 'warning');
+        return;
+    }
+    if (step === 3 && (!filledVariables || Object.keys(filledVariables).length === 0)) {
+        showToast('请先点击"AI 预览填充"', 'warning');
+        return;
+    }
+
+    document.querySelectorAll('.step-content').forEach(el => el.style.display = 'none');
+    document.getElementById(`step-${step}`).style.display = 'block';
+
+    document.querySelectorAll('#step-indicator .step').forEach(el => {
+        const s = parseInt(el.dataset.step);
+        el.classList.remove('active', 'completed');
+        if (s === step) el.classList.add('active');
+        else if (s < step) el.classList.add('completed');
+    });
+    document.querySelectorAll('#step-indicator .step-line').forEach((el, i) => {
+        el.classList.remove('active', 'completed');
+        if (i + 1 < step) el.classList.add('completed');
+        else if (i + 1 === step) el.classList.add('active');
+    });
+
+    currentStep = step;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ===== 快捷填充 =====
+function fillQuick(text) {
+    document.getElementById('user-input').value = text;
+    showToast('已填入描述模板', 'info');
+}
+
+// ===== 加载模型列表 =====
+async function loadModels() {
+    try {
+        const response = await fetch('/api/config');
+        const data = await response.json();
+        providerConfig = data;
+
+        const select = document.getElementById('model-select');
+        select.innerHTML = '';
+
+        const providers = data.providers || [];
+        if (providers.length === 0) {
+            select.innerHTML = '<option value="">暂无可用模型</option>';
+            showApiKeyWarning(true, '暂无已配置的 AI 模型');
+            return;
+        }
+
+        providers.forEach(p => {
+            const option = document.createElement('option');
+            option.value = p.name;
+            option.textContent = p.has_key
+                ? p.name.toUpperCase() + (p.model ? ` (${p.model})` : '')
+                : p.name.toUpperCase() + ' (未配置 API Key)';
+            select.appendChild(option);
+        });
+
+        if (data.default_provider) select.value = data.default_provider;
+        checkApiKeyStatus();
+    } catch (error) {
+        console.error('加载模型列表失败:', error);
+    }
+}
+
+function checkApiKeyStatus() {
+    const modelSelect = document.getElementById('model-select');
+    const selectedProvider = modelSelect.value;
+    const provider = (providerConfig.providers || []).find(p => p.name === selectedProvider);
+    if (!provider || !provider.has_key) {
+        showApiKeyWarning(true, `当前选择的 ${selectedProvider.toUpperCase()} 模型未配置 API Key`);
+    } else {
+        showApiKeyWarning(false);
+    }
+}
+
+function showApiKeyWarning(show, message) {
+    const warningDiv = document.getElementById('api-key-warning');
+    if (show) {
+        warningDiv.style.display = 'block';
+        if (message) warningDiv.querySelector('p').textContent = message;
+    } else {
+        warningDiv.style.display = 'none';
+    }
+}
+
+document.getElementById('model-select').addEventListener('change', checkApiKeyStatus);
+
+// ===== 加载模板 =====
 async function loadTemplates() {
     try {
         const response = await fetch('/api/templates');
@@ -91,21 +329,24 @@ async function loadTemplates() {
             select.appendChild(option);
         }
 
-        // 检查URL参数
         const params = new URLSearchParams(window.location.search);
         const templateParam = params.get('template');
+        const descriptionParam = params.get('description');
+
         if (templateParam) {
             select.value = decodeURIComponent(templateParam);
-            if (select.value) {
-                select.dispatchEvent(new Event('change'));
-            }
+            if (select.value) select.dispatchEvent(new Event('change'));
         }
-
+        if (descriptionParam) {
+            document.getElementById('user-input').value = decodeURIComponent(descriptionParam);
+        }
     } catch (error) {
         console.error('加载模板失败:', error);
+        showToast('加载模板失败', 'error');
     }
 }
 
+// ===== 模板选择变化 =====
 document.getElementById('template-select').addEventListener('change', async (e) => {
     const filename = e.target.value;
     selectedTemplate = filename;
@@ -123,44 +364,61 @@ document.getElementById('template-select').addEventListener('change', async (e) 
 
         if (data.error) {
             infoDiv.innerHTML = `<p class="error">错误: ${data.error}</p>`;
-            if (data.available) {
-                infoDiv.innerHTML += `<p class="info">可用文件: ${data.available.join(', ')}</p>`;
-            }
         } else if (data.variables && data.variables.length > 0) {
             variables = data.variables;
-            infoDiv.innerHTML = `<p><strong>模板变量：</strong>${data.variables.join(', ')}</p>`;
+            let html = `<p style="font-weight:600;">模板变量（${data.variables.length}个）：</p>`;
+            html += '<div class="variable-tags" style="margin-top:8px;">';
+            data.variables.forEach(v => {
+                html += `<span class="variable-tag">{{${v}}}</span>`;
+            });
+            html += '</div>';
+            infoDiv.innerHTML = html;
         } else {
             variables = [];
-            let html = '<p class="info">此模板暂无变量</p>';
-            if (data.text_preview) {
-                html += `<details><summary>查看模板内容</summary><pre style="max-height:200px;overflow:auto;">${escapeHtml(data.text_preview)}</pre></details>`;
-            }
-            infoDiv.innerHTML = html;
+            infoDiv.innerHTML = '<p class="info-text">此模板暂无变量</p>';
         }
     } catch (error) {
         infoDiv.innerHTML = `<p class="error">获取变量失败: ${error.message}</p>`;
     }
 });
 
+// ===== AI 预览填充 =====
 async function previewVariables() {
     const templateName = document.getElementById('template-select').value;
     const userInput = document.getElementById('user-input').value.trim();
     const model = document.getElementById('model-select').value;
-    const infoDiv = document.getElementById('variable-info');
 
-    if (!templateName) {
-        alert('请选择模板');
+    if (!templateName) { showToast('请选择模板', 'warning'); return; }
+    if (!model) { showToast('请选择 AI 模型', 'warning'); return; }
+    if (!userInput) { showToast('请输入公文内容描述', 'warning'); return; }
+
+    const provider = (providerConfig.providers || []).find(p => p.name === model);
+    if (!provider || !provider.has_key) {
+        showToast(`请先配置 ${model.toUpperCase()} 的 API Key`, 'error');
+        showApiKeyWarning(true, `${model.toUpperCase()} 模型未配置 API Key`);
         return;
     }
 
-    if (!userInput) {
-        alert('请输入公文内容描述');
-        return;
-    }
+    const btn = document.getElementById('btn-preview');
+    const btnText = document.getElementById('btn-preview-text');
+    const btnSpinner = document.getElementById('btn-preview-spinner');
+    const progressDiv = document.getElementById('ai-progress');
 
-    // 显示加载状态
-    infoDiv.innerHTML = '<p class="loading">正在调用AI填充变量，请稍候...</p>';
-    document.getElementById('btn-preview').disabled = true;
+    btn.disabled = true;
+    const modeLabel = currentMode === 'strict' ? '严格提取' : 'AI润色';
+    btnText.textContent = `${modeLabel}中...`;
+    btnSpinner.style.display = 'inline-block';
+    progressDiv.style.display = 'block';
+
+    const progressTexts = currentMode === 'strict'
+        ? ['📌 正在从输入中严格提取内容...', '📌 正在匹配变量与输入内容...', '📌 即将完成，请稍候...']
+        : ['✨ AI 正在分析并润色内容...', '✨ 正在理解您的公文需求...', '✨ 正在生成公文内容...', '✨ 即将完成，请稍候...'];
+    let progressIndex = 0;
+    document.getElementById('ai-progress-text').textContent = progressTexts[0];
+    const progressTimer = setInterval(() => {
+        progressIndex = (progressIndex + 1) % progressTexts.length;
+        document.getElementById('ai-progress-text').textContent = progressTexts[progressIndex];
+    }, 5000);
 
     try {
         const response = await fetch('/api/preview', {
@@ -169,95 +427,173 @@ async function previewVariables() {
             body: JSON.stringify({
                 template_name: templateName,
                 input: userInput,
-                model: model
+                model: model,
+                mode: currentMode
             })
         });
+
         const data = await response.json();
 
-        document.getElementById('btn-preview').disabled = false;
-
         if (data.error) {
-            infoDiv.innerHTML = `<p class="error">预览失败: ${data.error}</p>`;
+            let errorMsg = data.error;
+            if (errorMsg.includes('api_key') || errorMsg.includes('401')) errorMsg = 'API Key 无效或已过期，请前往配置页面检查';
+            else if (errorMsg.includes('timeout') || errorMsg.includes('timed out')) errorMsg = 'AI 服务响应超时，请稍后重试';
+            else if (errorMsg.includes('未知的LLM提供商')) errorMsg = '所选模型未配置，请前往配置页面添加';
+            else if (errorMsg.includes('Connection')) errorMsg = '无法连接 AI 服务，请检查网络';
+            showToast(`预览失败: ${errorMsg}`, 'error');
             return;
         }
 
-        filledVariables = data.variables || {};
-        showVariableEditor(data.variables || {});
+        if (!data.variables || Object.keys(data.variables).length === 0) {
+            showToast('AI 未能填充任何变量，请尝试更详细的描述', 'warning');
+            return;
+        }
+
+        filledVariables = data.variables;
+        variableSources = data.sources || {};
+        showVariableEditor(data.variables, variableSources, data.mode);
+        goToStep(3);
+
+        // 统计
+        const stats = countSources(variableSources);
+        const modeName = data.mode === 'strict' ? '严格提取' : 'AI润色';
+        if (stats.manual > 0) {
+            showToast(`${modeName}完成：${stats.extracted || stats.polished}个已填充，${stats.manual}个需手动填写（已标红）`, 'warning');
+        } else {
+            showToast(`${modeName}完成：所有变量已填充`, 'success');
+        }
 
     } catch (error) {
-        document.getElementById('btn-preview').disabled = false;
-        infoDiv.innerHTML = `<p class="error">预览失败: ${error.message}</p>`;
+        let errorMsg = error.message;
+        if (errorMsg.includes('Failed to fetch')) errorMsg = '网络连接失败，请检查服务是否正常运行';
+        showToast(`预览失败: ${errorMsg}`, 'error');
+    } finally {
+        clearInterval(progressTimer);
+        btn.disabled = false;
+        btnText.textContent = '🤖 AI 预览填充';
+        btnSpinner.style.display = 'none';
+        progressDiv.style.display = 'none';
     }
 }
 
-function showVariableEditor(vars) {
-    const card = document.getElementById('variable-edit-card');
+// ===== 统计来源 =====
+function countSources(sources) {
+    const counts = { extracted: 0, polished: 0, manual: 0 };
+    for (const src of Object.values(sources)) {
+        if (counts[src] !== undefined) counts[src]++;
+    }
+    return counts;
+}
+
+// ===== 显示变量编辑器 =====
+function showVariableEditor(vars, sources, mode) {
     const list = document.getElementById('variable-edit-list');
-    const inputCard = document.querySelectorAll('.card');
-
-    // 隐藏输入区域（除了变量编辑区）
-    inputCard.forEach(c => {
-        if (c.id !== 'variable-edit-card') {
-            c.style.display = 'none';
-        }
-    });
-
-    // 构建变量编辑表单
+    const summaryDiv = document.getElementById('fill-summary');
     let html = '';
+
+    // 填充统计摘要
+    const stats = countSources(sources);
+    let summaryHtml = '<div class="fill-summary-bar">';
+    const isStrict = mode === 'strict';
+
+    if (isStrict) {
+        if (stats.extracted > 0) summaryHtml += `<div class="fill-summary-item extracted">🟢 原文提取: ${stats.extracted}个</div>`;
+        if (stats.manual > 0) summaryHtml += `<div class="fill-summary-item manual">🔴 需手动填写: ${stats.manual}个</div>`;
+    } else {
+        if (stats.polished > 0) summaryHtml += `<div class="fill-summary-item polished">🔵 AI润色/补充: ${stats.polished}个</div>`;
+        if (stats.manual > 0) summaryHtml += `<div class="fill-summary-item manual">🔴 需手动填写: ${stats.manual}个</div>`;
+    }
+    summaryHtml += '</div>';
+
+    if (stats.manual > 0) {
+        summaryHtml += `<div style="padding:10px 14px; background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.2); border-radius:8px; font-size:13px; color:#b91c1c;">
+            ⚠️ 有 ${stats.manual} 个变量在输入中未找到对应内容，已标红，请在下方手动填写后生成。
+        </div>`;
+    }
+
+    summaryDiv.innerHTML = summaryHtml;
+
+    // 变量编辑项
     for (const [key, value] of Object.entries(vars)) {
+        const source = sources[key] || 'manual';
+        const isManual = source === 'manual';
+
+        let sourceTag = '';
+        if (isStrict) {
+            if (source === 'extracted') sourceTag = '<span class="variable-source-tag tag-extracted">原文提取</span>';
+            else sourceTag = '<span class="variable-source-tag tag-manual">需手动填写</span>';
+        } else {
+            if (source === 'polished') sourceTag = '<span class="variable-source-tag tag-polished">AI润色</span>';
+            else sourceTag = '<span class="variable-source-tag tag-manual">需手动填写</span>';
+        }
+
         html += `
-            <div class="form-group variable-edit-item">
-                <label for="var-${escapeHtml(key)}">${escapeHtml(key)}</label>
-                <textarea id="var-${escapeHtml(key)}" name="${escapeHtml(key)}" rows="3">${escapeHtml(value)}</textarea>
+            <div class="variable-edit-item source-${source}">
+                <label for="var-${escapeHtml(key)}" style="display:flex; align-items:center; gap:4px;">
+                    {{${escapeHtml(key)}}} ${sourceTag}
+                </label>
+                <textarea id="var-${escapeHtml(key)}" name="${escapeHtml(key)}" rows="4"
+                    style="${isManual ? 'border-color:#ef4444; background:rgba(239,68,68,0.03);' : ''}"
+                    placeholder="${isManual ? '请手动填写此变量内容...' : ''}">${escapeHtml(value)}</textarea>
+                ${isManual ? '<div class="manual-hint">⚠️ 输入中未找到此变量对应内容，请手动填写</div>' : ''}
+                <button type="button" class="btn btn-sm btn-outline" style="margin-top:6px;" onclick="copyVariable('var-${escapeHtml(key)}')">📋 复制内容</button>
             </div>
         `;
     }
 
     if (html === '') {
-        html = '<p class="info">没有需要编辑的变量</p>';
+        html = '<div class="empty-state"><div class="empty-state-icon">🤷</div><div class="empty-state-text">没有需要编辑的变量</div></div>';
     }
 
     list.innerHTML = html;
-    card.style.display = 'block';
-    window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function backToInput() {
-    // 显示输入区域
-    document.querySelectorAll('.card').forEach(c => {
-        c.style.display = 'block';
-    });
-    document.getElementById('variable-edit-card').style.display = 'none';
-    document.getElementById('preview-card').style.display = 'none';
-
-    // 恢复变量信息显示
-    if (variables.length > 0) {
-        document.getElementById('variable-info').innerHTML =
-            `<p><strong>模板变量：</strong>${variables.join(', ')}</p>`;
+// ===== 复制变量内容 =====
+function copyVariable(textareaId) {
+    const el = document.getElementById(textareaId);
+    if (el) {
+        navigator.clipboard.writeText(el.value).then(() => {
+            showToast('已复制到剪贴板', 'success');
+        }).catch(() => {
+            el.select();
+            document.execCommand('copy');
+            showToast('已复制到剪贴板', 'success');
+        });
     }
 }
 
+// ===== 生成公文 =====
 async function generateDoc() {
     const templateName = document.getElementById('template-select').value;
     const userInput = document.getElementById('user-input').value.trim();
-    const outputName = document.getElementById('output-name').value.trim() || '公文.docx';
+    let outputName = document.getElementById('output-name').value.trim() || '公文.docx';
     const model = document.getElementById('model-select').value;
     const resultDiv = document.getElementById('generate-result');
 
-    if (!outputName.endsWith('.docx')) {
-        outputName += '.docx';
-    }
+    if (!outputName.endsWith('.docx')) outputName += '.docx';
 
-    // 收集用户编辑后的变量值
-    const filledContent = {};
+    // 检查是否还有空变量
+    const emptyVars = [];
     for (const key of Object.keys(filledVariables)) {
         const textarea = document.getElementById(`var-${key}`);
-        if (textarea) {
-            filledContent[key] = textarea.value;
+        if (textarea && !textarea.value.trim()) {
+            emptyVars.push(key);
         }
     }
 
-    resultDiv.innerHTML = '<p class="info">正在生成，请稍候...</p>';
+    if (emptyVars.length > 0) {
+        const confirmed = confirm(`以下变量尚未填写内容：\n${emptyVars.map(v => '  • ' + v).join('\n')}\n\n生成公文时这些位置将为空，是否继续？`);
+        if (!confirmed) return;
+    }
+
+    const filledContent = {};
+    for (const key of Object.keys(filledVariables)) {
+        const textarea = document.getElementById(`var-${key}`);
+        if (textarea) filledContent[key] = textarea.value;
+    }
+
+    resultDiv.className = 'result-message info';
+    resultDiv.innerHTML = '⏳ 正在生成公文，请稍候...';
     resultDiv.style.display = 'block';
 
     try {
@@ -276,19 +612,43 @@ async function generateDoc() {
         const data = await response.json();
 
         if (data.success) {
-            resultDiv.innerHTML = `<p class="success">生成成功！<a href="/api/output/${encodeURIComponent(data.output_name)}" target="_blank">下载文件</a></p>`;
-            document.getElementById('preview-card').style.display = 'block';
-            document.getElementById('preview-content').innerHTML =
-                `<p>文件已生成：<a href="/api/output/${encodeURIComponent(data.output_name)}">${escapeHtml(data.output_name)}</a></p>`;
+            document.getElementById('result-filename').textContent = data.output_name;
+            document.getElementById('result-download').href = `/api/output/${encodeURIComponent(data.output_name)}`;
+            goToStep(4);
+            showToast('公文生成成功！', 'success');
         } else {
-            resultDiv.innerHTML = `<p class="error">生成失败: ${data.error || '未知错误'}</p>`;
+            let errorMsg = data.error || '未知错误';
+            if (errorMsg.includes('api_key') || errorMsg.includes('401')) errorMsg = 'API Key 无效，请前往配置页面检查';
+            resultDiv.className = 'result-message error';
+            resultDiv.innerHTML = `生成失败: ${errorMsg}`;
+            showToast('公文生成失败', 'error');
         }
     } catch (error) {
-        resultDiv.innerHTML = `<p class="error">生成失败: ${error.message}</p>`;
+        resultDiv.className = 'result-message error';
+        resultDiv.innerHTML = `生成失败: ${error.message}`;
+        showToast('公文生成失败', 'error');
     }
 }
 
+// ===== 重置 =====
+function resetAll() {
+    document.getElementById('template-select').value = '';
+    document.getElementById('user-input').value = '';
+    document.getElementById('output-name').value = '公文.docx';
+    document.getElementById('variable-info').innerHTML = '';
+    document.getElementById('variable-edit-list').innerHTML = '';
+    document.getElementById('fill-summary').innerHTML = '';
+    selectedTemplate = '';
+    variables = [];
+    filledVariables = {};
+    variableSources = {};
+    goToStep(1);
+}
+
+// 初始化
+loadModels();
 loadTemplates();
+updateModeUI();
 </script>
 {% endraw %}
 {% endblock %}

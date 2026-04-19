@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block title %}公文写作助手{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>👋 欢迎使用公文写作助手</h1>
+    <p class="subtitle">基于 AI 模板的公文自动生成工具，让公文写作更高效</p>
+</div>
+
+<!-- 统计卡片 -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon blue">📄</div>
+        <div class="stat-info">
+            <h3 id="stat-templates">-</h3>
+            <p>可用模板</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon green">📝</div>
+        <div class="stat-info">
+            <h3 id="stat-generated">-</h3>
+            <p>已生成公文</p>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon orange">🤖</div>
+        <div class="stat-info">
+            <h3 id="stat-provider">-</h3>
+            <p>AI 提供商</p>
+        </div>
+    </div>
+</div>
+
+<!-- 快捷入口 -->
+<div class="card">
+    <h2>🚀 快捷操作</h2>
+    <div class="quick-actions">
+        <a href="/generate" class="quick-action">
+            <div class="quick-action-icon" style="background: rgba(37,99,235,0.1); color: #2563eb;">✍️</div>
+            <div>
+                <div class="quick-action-text">生成公文</div>
+                <div class="quick-action-desc">选择模板，AI 自动生成</div>
+            </div>
+        </a>
+        <a href="/templates" class="quick-action">
+            <div class="quick-action-icon" style="background: rgba(5,150,105,0.1); color: #059669;">📄</div>
+            <div>
+                <div class="quick-action-text">管理模板</div>
+                <div class="quick-action-desc">上传和预览模板</div>
+            </div>
+        </a>
+        <a href="/config" class="quick-action">
+            <div class="quick-action-icon" style="background: rgba(217,119,6,0.1); color: #d97706;">⚙️</div>
+            <div>
+                <div class="quick-action-text">配置 API</div>
+                <div class="quick-action-desc">设置 AI 模型密钥</div>
+            </div>
+        </a>
+    </div>
+</div>
+
+<!-- 公文类型快捷选择 -->
+<div class="card">
+    <h2>📋 快速开始 — 选择公文类型</h2>
+    <p class="info-text">选择公文类型后，将自动跳转到生成页面并填入推荐的描述模板</p>
+    <div class="doc-type-grid" id="doc-type-grid">
+        <div class="doc-type-card" onclick="quickGenerate('通知', '关于召开XXX会议的通知，会议时间、地点、参会人员、议程等')">
+            <div class="doc-type-icon">📢</div>
+            <div class="doc-type-name">通知</div>
+        </div>
+        <div class="doc-type-card" onclick="quickGenerate('会议纪要', 'XXX会议纪要，包含会议时间地点、参会人员、议题、决议等')">
+            <div class="doc-type-icon">📝</div>
+            <div class="doc-type-name">会议纪要</div>
+        </div>
+        <div class="doc-type-card" onclick="quickGenerate('请示', '关于XXX事项的请示，包含请示原因、具体事项、意见建议等')">
+            <div class="doc-type-icon">📨</div>
+            <div class="doc-type-name">请示</div>
+        </div>
+        <div class="doc-type-card" onclick="quickGenerate('报告', '关于XXX工作的报告，包含工作背景、开展情况、取得成效、存在问题、下一步计划等')">
+            <div class="doc-type-icon">📊</div>
+            <div class="doc-type-name">报告</div>
+        </div>
+        <div class="doc-type-card" onclick="quickGenerate('批复', '关于XXX事项的批复，包含对请示事项的明确意见和具体要求')">
+            <div class="doc-type-icon">✅</div>
+            <div class="doc-type-name">批复</div>
+        </div>
+        <div class="doc-type-card" onclick="quickGenerate('函', '关于XXX事项的函，包含发函原因、具体事项、期盼回复等')">
+            <div class="doc-type-icon">✉️</div>
+            <div class="doc-type-name">函</div>
+        </div>
+    </div>
+</div>
+
+<!-- 最近生成记录 -->
+<div class="card">
+    <h2>🕐 最近生成记录</h2>
+    <div id="history-list">
+        <div class="empty-state">
+            <div class="empty-state-icon">📭</div>
+            <div class="empty-state-text">暂无生成记录</div>
+            <div class="empty-state-desc">生成公文后，记录将显示在这里</div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% raw %}
+<script>
+async function loadDashboard() {
+    try {
+        // 加载模板数量
+        const templatesResp = await fetch('/api/templates');
+        const templates = await templatesResp.json();
+        const templateCount = Array.isArray(templates) ? templates.length : 0;
+        document.getElementById('stat-templates').textContent = templateCount;
+
+        // 加载配置信息
+        try {
+            const configResp = await fetch('/api/config');
+            const config = await configResp.json();
+            const providerCount = config.providers ? config.providers.filter(p => p.has_key).length : 0;
+            document.getElementById('stat-provider').textContent = providerCount;
+        } catch(e) {
+            document.getElementById('stat-provider').textContent = '0';
+        }
+
+        // 加载已生成数量
+        try {
+            const historyResp = await fetch('/api/history');
+            const history = await historyResp.json();
+            const genCount = Array.isArray(history) ? history.length : 0;
+            document.getElementById('stat-generated').textContent = genCount;
+            renderHistory(history);
+        } catch(e) {
+            document.getElementById('stat-generated').textContent = '0';
+        }
+
+    } catch (error) {
+        console.error('加载仪表盘失败:', error);
+    }
+}
+
+function renderHistory(items) {
+    const container = document.getElementById('history-list');
+    if (!items || items.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">📭</div>
+                <div class="empty-state-text">暂无生成记录</div>
+                <div class="empty-state-desc">生成公文后，记录将显示在这里</div>
+            </div>`;
+        return;
+    }
+
+    let html = '<ul class="history-list">';
+    items.slice(0, 5).forEach(item => {
+        html += `
+        <li class="history-item">
+            <div class="history-info">
+                <div class="history-icon">📄</div>
+                <div>
+                    <div class="history-name">${escapeHtml(item.output_name || item.template_name)}</div>
+                    <div class="history-meta">${formatDate(item.created_at)} · ${escapeHtml(item.template_name || '')}</div>
+                </div>
+            </div>
+            <div class="history-actions">
+                <a href="/api/output/${encodeURIComponent(item.output_name)}" class="btn btn-sm btn-outline" target="_blank">下载</a>
+            </div>
+        </li>`;
+    });
+    html += '</ul>';
+    container.innerHTML = html;
+}
+
+function quickGenerate(type, description) {
+    window.location.href = `/generate?description=${encodeURIComponent(description)}`;
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    return d.toLocaleString('zh-CN', {
+        month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit'
+    });
+}
+
+loadDashboard();
+</script>
+{% endraw %}
+{% endblock %}

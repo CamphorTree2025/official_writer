@@ -1,13 +1,41 @@
 """Flask Web应用"""
 import os
+import json
+from datetime import datetime
 from flask import Flask, render_template, jsonify, request, send_from_directory, redirect, url_for
 from pathlib import Path
+import httpx
 
 from ..config import load_config, get_config, Config, get_project_root
 from ..core.template_parser import TemplateParser
 from ..core.variable_engine import VariableEngine
 from ..llm.factory import LLMFactory
 from ..output.docx_generator import DocxGenerator
+
+
+# 历史记录文件路径
+def _get_history_path():
+    return get_project_root() / "outputs" / ".history.json"
+
+
+def _load_history():
+    """加载生成历史"""
+    path = _get_history_path()
+    if path.exists():
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            return []
+    return []
+
+
+def _save_history(history):
+    """保存生成历史"""
+    path = _get_history_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(history, f, ensure_ascii=False, indent=2)
 
 
 def create_app():
@@ -34,10 +62,12 @@ def create_app():
     (project_root / "templates").mkdir(exist_ok=True)
     (project_root / "outputs").mkdir(exist_ok=True)
 
+    # ===== 页面路由 =====
+
     @app.route("/")
     def index():
-        """首页 - 配置页面"""
-        return render_template("config.html")
+        """首页 - Dashboard"""
+        return render_template("index.html")
 
     @app.route("/config")
     def config_page():
@@ -53,6 +83,8 @@ def create_app():
     def generate_page():
         """公文生成页面"""
         return render_template("generate.html")
+
+    # ===== API 路由 =====
 
     @app.route("/api/config", methods=["GET"])
     def get_config_api():
@@ -171,11 +203,6 @@ def create_app():
             model = data.get("model", "")
             base_url = data.get("base_url", "")
 
-            print(f"测试 {provider_name} 配置...")
-            print(f"group_id: {group_id[:10] if group_id else 'empty'}...")
-            print(f"api_key: {api_key[:10] if api_key else 'empty'}...")
-            print(f"model: {model}")
-
             # 根据提供商创建临时适配器测试
             from ..llm.minimax import MinimaxAdapter
             from ..llm.glm import GLMAdapter
@@ -199,7 +226,6 @@ def create_app():
             # 调用API测试
             test_prompt = "请回复'测试成功'，只用这四个字。"
             response = adapter.complete(test_prompt)
-            print(f"测试响应: {response}")
 
             return jsonify({
                 "success": True,
@@ -207,9 +233,6 @@ def create_app():
                 "response": response
             })
         except Exception as e:
-            import traceback
-            print(f"测试失败: {e}")
-            traceback.print_exc()
             return jsonify({"success": False, "error": str(e)}), 500
 
     @app.route("/api/templates", methods=["GET"])
@@ -220,6 +243,9 @@ def create_app():
             template_dir = project_root / "templates"
             templates = []
             for f in template_dir.glob("*.docx"):
+                # 过滤 macOS 资源分叉文件
+                if f.name.startswith("._"):
+                    continue
                 templates.append({
                     "name": f.name,
                     "path": str(f),
@@ -235,7 +261,6 @@ def create_app():
         try:
             from urllib.parse import unquote
             filename = request.args.get("name", "")
-            # URL解码
             filename = unquote(filename)
             if not filename:
                 return jsonify({"error": "缺少文件名"}), 400
@@ -243,22 +268,14 @@ def create_app():
             project_root = get_project_root()
             template_path = project_root / "templates" / filename
 
-            # 列出templates目录下的所有文件用于调试
-            files = list((project_root / "templates").glob("*.docx"))
-
             if not template_path.exists():
-                return jsonify({
-                    "error": f"模板文件不存在: {filename}",
-                    "searched_path": str(template_path),
-                    "available_files": [f.name for f in files]
-                }), 400
+                return jsonify({"error": f"模板文件不存在: {filename}"}), 400
 
             parser = TemplateParser()
             preview_data = parser.get_preview(template_path)
             return jsonify(preview_data)
         except Exception as e:
-            import traceback
-            return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
+            return jsonify({"error": str(e)}), 500
 
     @app.route("/api/template/<path:filename>")
     def download_template(filename):
@@ -273,7 +290,7 @@ def create_app():
             from urllib.parse import unquote
             data = request.json
             filename = data.get("name", "")
-            filename = unquote(filename)  # URL解码
+            filename = unquote(filename)
             if not filename:
                 return jsonify({"error": "缺少文件名"}), 400
 
@@ -300,11 +317,9 @@ def create_app():
                 return jsonify({"error": "没有选择文件"}), 400
 
             if file and allowed_file(file.filename):
-                # 保留原始文件名（处理中文名）
                 filename = file.filename
                 # 确保文件名安全
-                if not filename.replace(".", "").replace("_", "").replace("-", "").isalnum():
-                    # 如果有特殊字符，使用时间戳重命名
+                if not filename.replace(".", "").replace("_", "").replace("-", "").replace("（", "").replace("）", "").isalnum():
                     import time
                     filename = f"template_{int(time.time())}.docx"
 
@@ -338,14 +353,13 @@ def create_app():
             template_path = template_dir / filename
 
             if not template_path.exists():
-                # 尝试模糊匹配
                 files = list(template_dir.glob("*.docx"))
                 matched = [f for f in files if filename in f.name or f.stem in filename]
                 if matched:
                     template_path = matched[0]
                 else:
                     return jsonify({
-                        "error": f"模板文件不存在",
+                        "error": "模板文件不存在",
                         "searched": filename,
                         "available": [f.name for f in files]
                     }), 400
@@ -354,23 +368,103 @@ def create_app():
             text, variables = parser.parse(template_path)
             return jsonify({
                 "variables": variables,
-                "text_preview": text[:300] if text else "",
+                "text_preview": text[:500] if text else "",
                 "found_file": template_path.name
             })
         except Exception as e:
-            import traceback
-            return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
+            return jsonify({"error": str(e)}), 500
 
-    @app.route("/api/generate", methods=["POST"])
-    def generate_doc():
-        """生成公文（使用预览编辑后的变量值）"""
+    @app.route("/api/preview", methods=["POST"])
+    def preview_variables():
+        """预览变量填充结果（供用户编辑）"""
         try:
             data = request.json
             template_name = data.get("template_name", "")
             user_input = data.get("input", "")
-            output_name = data.get("output_name", "output.docx")
             model_provider = data.get("model")
-            # 支持直接传入预填充的变量值
+            fill_mode = data.get("mode", "polish")  # strict 或 polish
+
+            if not template_name:
+                return jsonify({"error": "请选择模板"}), 400
+
+            if not user_input:
+                return jsonify({"error": "请输入公文内容描述"}), 400
+
+            if not model_provider:
+                return jsonify({"error": "请选择 AI 模型"}), 400
+
+            # 校验填充模式
+            if fill_mode not in ("strict", "polish"):
+                return jsonify({"error": f"无效的填充模式: {fill_mode}，仅支持 strict 或 polish"}), 400
+
+            project_root = get_project_root()
+            template_path = project_root / "templates" / template_name
+
+            if not template_path.exists():
+                return jsonify({"error": "模板文件不存在"}), 400
+
+            # 检查提供商是否已配置
+            config = get_config()
+            provider_config = config.providers.get(model_provider)
+            if provider_config is None:
+                available = list(config.providers.keys())
+                return jsonify({
+                    "error": f"未知的LLM提供商: {model_provider}，当前已配置: {', '.join(available) if available else '无'}。请前往 API 配置页面添加。"
+                }), 400
+
+            if not provider_config.api_key:
+                return jsonify({
+                    "error": f"{model_provider} 的 API Key 未配置，请前往 API 配置页面设置"
+                }), 400
+
+            # 解析模板
+            parser = TemplateParser()
+            template_text, variables = parser.parse(template_path)
+
+            if not variables:
+                return jsonify({"variables": {}, "sources": {}, "message": "模板中没有变量"})
+
+            # 调用LLM填充变量（支持模式）
+            llm = LLMFactory.get_adapter(model_provider)
+            engine = VariableEngine(llm)
+            filled_content, sources = engine.fill_template(
+                template_text, variables, user_input, mode=fill_mode
+            )
+
+            return jsonify({
+                "variables": filled_content,
+                "sources": sources,
+                "mode": fill_mode,
+            })
+        except httpx.TimeoutException:
+            return jsonify({"error": "AI 服务响应超时，请稍后重试或换一个模型"}), 504
+        except httpx.ConnectError:
+            return jsonify({"error": "无法连接 AI 服务，请检查网络连接"}), 502
+        except httpx.HTTPStatusError as e:
+            status_code = e.response.status_code
+            if status_code == 401:
+                return jsonify({"error": "API Key 无效或已过期，请前往配置页面检查"}), 401
+            elif status_code == 429:
+                return jsonify({"error": "AI 服务请求频率过高，请稍后重试"}), 429
+            else:
+                return jsonify({"error": f"AI 服务返回错误 ({status_code})，请稍后重试"}), 500
+        except Exception as e:
+            import traceback
+            error_msg = str(e)
+            # 对常见错误做友好提示
+            if "api_key" in error_msg.lower() or "apikey" in error_msg.lower():
+                return jsonify({"error": "API Key 无效或已过期，请前往配置页面检查"}), 401
+            return jsonify({"error": error_msg, "trace": traceback.format_exc()}), 500
+
+    @app.route("/api/generate", methods=["POST"])
+    def generate_doc():
+        """生成公文"""
+        try:
+            data = request.json
+            template_name = data.get("template_name", "")
+            user_input = data.get("input", "")
+            output_name = data.get("output_name", "公文.docx")
+            model_provider = data.get("model")
             filled_content = data.get("filled_content", {})
 
             if not template_name:
@@ -381,7 +475,6 @@ def create_app():
             if not template_path.exists():
                 return jsonify({"error": "模板文件不存在"}), 400
 
-            # 如果没有预填充的内容，则需要用户输入
             if not filled_content and not user_input:
                 return jsonify({"error": "请输入公文内容描述"}), 400
 
@@ -400,6 +493,19 @@ def create_app():
             generator = DocxGenerator()
             generator.generate(template_path, filled_content, output_path)
 
+            # 记录到历史
+            history = _load_history()
+            history.insert(0, {
+                "template_name": template_name,
+                "output_name": output_name,
+                "model": model_provider or "default",
+                "created_at": datetime.now().isoformat(),
+                "input_preview": user_input[:100] if user_input else "",
+            })
+            # 最多保留50条
+            history = history[:50]
+            _save_history(history)
+
             return jsonify({
                 "success": True,
                 "output": str(output_path),
@@ -408,59 +514,23 @@ def create_app():
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-    @app.route("/api/preview", methods=["POST"])
-    def preview_variables():
-        """预览变量填充结果（供用户编辑）"""
-        import traceback
-        print("=== /api/preview called ===")
+    @app.route("/api/history", methods=["GET"])
+    def get_history():
+        """获取生成历史记录"""
         try:
-            data = request.json
-            template_name = data.get("template_name", "")
-            user_input = data.get("input", "")
-            model_provider = data.get("model")
-
-            print(f"template_name: {template_name}")
-            print(f"user_input: {user_input}")
-            print(f"model_provider: {model_provider}")
-
-            if not template_name:
-                return jsonify({"error": "请选择模板"}), 400
-
-            if not user_input:
-                return jsonify({"error": "请输入公文内容描述"}), 400
-
-            project_root = get_project_root()
-            template_path = project_root / "templates" / template_name
-            print(f"template_path: {template_path}, exists: {template_path.exists()}")
-
-            if not template_path.exists():
-                return jsonify({"error": "模板文件不存在"}), 400
-
-            # 解析模板
-            parser = TemplateParser()
-            template_text, variables = parser.parse(template_path)
-            print(f"variables from template: {variables}")
-
-            if not variables:
-                return jsonify({"variables": {}, "message": "模板中没有变量"})
-
-            # 调用LLM填充变量
-            print(f"Getting LLM adapter for: {model_provider}")
-            llm = LLMFactory.get_adapter(model_provider)
-            print(f"LLM adapter: {llm}")
-
-            print("Calling fill_template...")
-            engine = VariableEngine(llm)
-            filled_content = engine.fill_template(template_text, variables, user_input)
-            print(f"filled_content: {filled_content}")
-
-            return jsonify({
-                "variables": filled_content,
-            })
+            history = _load_history()
+            return jsonify(history)
         except Exception as e:
-            print(f"ERROR: {e}")
-            traceback.print_exc()
-            return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/history/clear", methods=["POST"])
+    def clear_history():
+        """清除生成历史"""
+        try:
+            _save_history([])
+            return jsonify({"success": True})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
 
     @app.route("/api/output/<filename>")
     def download_output(filename):

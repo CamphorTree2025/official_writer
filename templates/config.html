@@ -4,19 +4,19 @@
 
 {% block content %}
 <div class="page-header">
-    <h1>API配置</h1>
+    <h1>⚙️ API 配置</h1>
     <p class="subtitle">配置大模型服务商的API密钥和模型参数</p>
 </div>
 
 <div class="card">
-    <h2>当前配置</h2>
+    <h2>📊 当前配置状态</h2>
     <div id="config-info" class="config-info">
-        <p class="loading">加载中...</p>
+        <div style="text-align:center; padding:20px;"><div class="loading-spinner"></div></div>
     </div>
 </div>
 
 <div class="card">
-    <h2>编辑配置</h2>
+    <h2>✏️ 编辑配置</h2>
     <form id="config-form" class="config-form">
         <div class="form-group">
             <label for="default-provider">默认提供商</label>
@@ -25,63 +25,73 @@
                 <option value="glm">智谱GLM</option>
                 <option value="openai">OpenAI</option>
             </select>
+            <p class="form-hint">生成公文时默认使用的 AI 模型提供商</p>
         </div>
 
         <div class="provider-section">
-            <h3>Minimax
-                <button type="button" class="btn-delete-provider" onclick="deleteProvider('minimax')">删除</button>
-                <button type="button" class="btn-test" onclick="testProvider('minimax')">测试</button>
+            <h3>
+                <span class="provider-badge minimax">M</span>
+                Minimax
+                <button type="button" class="btn-test" onclick="testProvider('minimax')">🧪 测试连接</button>
+                <button type="button" class="btn-delete-provider" onclick="deleteProvider('minimax')">🗑 删除</button>
             </h3>
             <div class="form-group">
                 <label for="minimax-group-id">Group ID</label>
-                <input type="text" id="minimax-group-id" name="minimax_group_id" placeholder="输入Group ID">
+                <input type="text" id="minimax-group-id" name="minimax_group_id" placeholder="输入 Group ID">
             </div>
             <div class="form-group">
                 <label for="minimax-api-key">API Key</label>
-                <input type="password" id="minimax-api-key" name="minimax_api_key" placeholder="输入API Key">
+                <input type="password" id="minimax-api-key" name="minimax_api_key" placeholder="输入 API Key">
             </div>
             <div class="form-group">
                 <label for="minimax-model">模型</label>
-                <input type="text" id="minimax-model" name="minimax_model" value="abab6.5s">
+                <input type="text" id="minimax-model" name="minimax_model" value="abab6.5s" placeholder="模型名称">
+                <p class="form-hint">推荐: abab6.5s, MiniMax-M2.7</p>
             </div>
             <div id="minimax-test-result" class="test-result"></div>
         </div>
 
         <div class="provider-section">
-            <h3>智谱GLM
-                <button type="button" class="btn-delete-provider" onclick="deleteProvider('glm')">删除</button>
-                <button type="button" class="btn-test" onclick="testProvider('glm')">测试</button>
+            <h3>
+                <span class="provider-badge glm">G</span>
+                智谱GLM
+                <button type="button" class="btn-test" onclick="testProvider('glm')">🧪 测试连接</button>
+                <button type="button" class="btn-delete-provider" onclick="deleteProvider('glm')">🗑 删除</button>
             </h3>
             <div class="form-group">
                 <label for="glm-api-key">API Key</label>
-                <input type="password" id="glm-api-key" name="glm_api_key" placeholder="输入API Key">
+                <input type="password" id="glm-api-key" name="glm_api_key" placeholder="输入 API Key">
             </div>
             <div class="form-group">
                 <label for="glm-model">模型</label>
-                <input type="text" id="glm-model" name="glm_model" value="glm-4">
+                <input type="text" id="glm-model" name="glm_model" value="glm-4" placeholder="模型名称">
+                <p class="form-hint">推荐: glm-4, glm-4-flash</p>
             </div>
             <div id="glm-test-result" class="test-result"></div>
         </div>
 
         <div class="provider-section">
-            <h3>OpenAI
-                <button type="button" class="btn-delete-provider" onclick="deleteProvider('openai')">删除</button>
-                <button type="button" class="btn-test" onclick="testProvider('openai')">测试</button>
+            <h3>
+                <span class="provider-badge openai">O</span>
+                OpenAI
+                <button type="button" class="btn-test" onclick="testProvider('openai')">🧪 测试连接</button>
+                <button type="button" class="btn-delete-provider" onclick="deleteProvider('openai')">🗑 删除</button>
             </h3>
             <div class="form-group">
                 <label for="openai-api-key">API Key</label>
-                <input type="password" id="openai-api-key" name="openai_api_key" placeholder="输入API Key">
+                <input type="password" id="openai-api-key" name="openai_api_key" placeholder="输入 API Key">
             </div>
             <div class="form-group">
                 <label for="openai-model">模型</label>
-                <input type="text" id="openai-model" name="openai_model" value="gpt-4">
+                <input type="text" id="openai-model" name="openai_model" value="gpt-4" placeholder="模型名称">
+                <p class="form-hint">推荐: gpt-4, gpt-4o</p>
             </div>
             <div id="openai-test-result" class="test-result"></div>
         </div>
 
         <div class="form-actions">
-            <button type="submit" class="btn btn-primary">保存配置</button>
-            <button type="button" class="btn btn-secondary" onclick="loadConfig()">重置</button>
+            <button type="submit" class="btn btn-primary">💾 保存配置</button>
+            <button type="button" class="btn btn-secondary" onclick="loadConfig()">🔄 重置</button>
         </div>
     </form>
     <div id="save-result" class="result-message"></div>
@@ -97,19 +107,19 @@ async function loadConfig() {
         const data = await response.json();
 
         if (data.error) {
-            showError('config-info', data.error);
+            document.getElementById('config-info').innerHTML = `<p class="error">加载失败: ${data.error}</p>`;
             return;
         }
 
-        let html = `<p><strong>默认提供商：</strong>${escapeHtml(data.default_provider)}</p>`;
-        html += '<table class="provider-table"><thead><tr><th>提供商</th><th>Group ID</th><th>模型</th><th>API Key</th><th>操作</th></tr></thead><tbody>';
+        let html = `<p style="font-weight:600; margin-bottom:12px;">默认提供商: <span class="badge badge-info">${escapeHtml(data.default_provider)}</span></p>`;
+        html += '<table class="provider-table"><thead><tr><th>提供商</th><th>Group ID</th><th>模型</th><th>API Key</th></tr></thead><tbody>';
         for (const p of data.providers) {
+            const keyBadge = p.has_key ? '<span class="badge badge-success">✓ 已配置</span>' : '<span class="badge badge-error">✗ 未配置</span>';
             html += `<tr>
-                <td>${escapeHtml(p.name)}</td>
+                <td><span class="provider-badge ${p.name}" style="font-size:10px;">${p.name.charAt(0).toUpperCase()}</span> ${escapeHtml(p.name)}</td>
                 <td>${escapeHtml(p.group_id || '-')}</td>
-                <td>${escapeHtml(p.model)}</td>
-                <td>${p.has_key ? '✓ 已配置' : '✗ 未配置'}</td>
-                <td><button class="btn-link btn-delete" onclick="deleteProvider('${escapeHtml(p.name)}')">删除</button></td>
+                <td><code style="background:var(--bg); padding:2px 6px; border-radius:4px;">${escapeHtml(p.model)}</code></td>
+                <td>${keyBadge}</td>
             </tr>`;
         }
         html += '</tbody></table>';
@@ -118,7 +128,6 @@ async function loadConfig() {
         // 填充表单
         document.getElementById('default-provider').value = data.default_provider;
 
-        // 填充各provider的值
         for (const p of data.providers) {
             const groupIdInput = document.getElementById(p.name + '-group-id');
             if (groupIdInput) groupIdInput.value = p.group_id || '';
@@ -129,7 +138,7 @@ async function loadConfig() {
         }
 
     } catch (error) {
-        showError('config-info', '加载配置失败: ' + error.message);
+        document.getElementById('config-info').innerHTML = `<p class="error">加载配置失败: ${error.message}</p>`;
     }
 }
 
@@ -151,66 +160,48 @@ async function testProvider(name) {
     const model = modelInput ? modelInput.value : '';
 
     if (!api_key) {
-        resultDiv.innerHTML = '<p class="error">请先填写API Key</p>';
+        resultDiv.innerHTML = '<p style="color:var(--warning);">⚠️ 请先填写 API Key</p>';
         return;
     }
 
-    resultDiv.innerHTML = '<p class="loading">测试中...</p>';
+    resultDiv.innerHTML = '<p style="color:var(--text-3);"><span class="loading-spinner"></span> 正在测试连接...</p>';
 
     try {
         const response = await fetch('/api/config/test', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                provider: name,
-                group_id: group_id,
-                api_key: api_key,
-                model: model
-            })
+            body: JSON.stringify({ provider: name, group_id, api_key, model })
         });
         const data = await response.json();
 
         if (data.success) {
-            resultDiv.innerHTML = `<p class="success">✓ ${data.message}</p>`;
+            resultDiv.innerHTML = `<p style="color:var(--success);">✅ ${data.message}</p>`;
+            showToast('API 连接测试成功！', 'success');
         } else {
-            resultDiv.innerHTML = `<p class="error">✗ ${data.error}</p>`;
+            resultDiv.innerHTML = `<p style="color:var(--error);">❌ ${data.error}</p>`;
+            showToast('API 连接测试失败', 'error');
         }
     } catch (error) {
-        resultDiv.innerHTML = `<p class="error">✗ 测试失败: ${error.message}</p>`;
+        resultDiv.innerHTML = `<p style="color:var(--error);">❌ 测试失败: ${error.message}</p>`;
     }
 }
 
 async function deleteProvider(name) {
-    if (!confirm('确定要删除提供商 "' + name + '" 的配置吗？')) {
-        return;
-    }
+    if (!confirm('确定要删除提供商 "' + name + '" 的配置吗？')) return;
 
     try {
-        const response = await fetch('/api/config/provider/' + encodeURIComponent(name), {
-            method: 'DELETE'
-        });
+        const response = await fetch('/api/config/provider/' + encodeURIComponent(name), { method: 'DELETE' });
         const data = await response.json();
 
         if (data.success) {
-            alert('提供商 "' + name + '" 已删除');
+            showToast(`提供商 "${name}" 已删除`, 'success');
             loadConfig();
         } else {
-            alert('删除失败: ' + (data.error || '未知错误'));
+            showToast('删除失败: ' + (data.error || '未知错误'), 'error');
         }
     } catch (error) {
-        alert('删除失败: ' + error.message);
+        showToast('删除失败: ' + error.message, 'error');
     }
-}
-
-function showError(elementId, message) {
-    document.getElementById(elementId).innerHTML =
-        `<p class="error">${message}</p>`;
-}
-
-function showSuccess(elementId, message) {
-    const el = document.getElementById(elementId);
-    el.innerHTML = `<p class="success">${message}</p>`;
-    setTimeout(() => el.innerHTML = '', 5000);
 }
 
 document.getElementById('config-form').addEventListener('submit', async (e) => {
@@ -237,13 +228,13 @@ document.getElementById('config-form').addEventListener('submit', async (e) => {
 
         const result = await response.json();
         if (result.success) {
-            showSuccess('save-result', '配置保存成功！');
+            showToast('配置保存成功！', 'success');
             loadConfig();
         } else {
-            showError('save-result', result.error);
+            showToast('保存失败: ' + result.error, 'error');
         }
     } catch (error) {
-        showError('save-result', '保存失败: ' + error.message);
+        showToast('保存失败: ' + error.message, 'error');
     }
 });
 

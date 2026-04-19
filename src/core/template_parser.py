@@ -23,17 +23,21 @@ class TemplateParser:
             template_path: 模板文件路径(.docx)
 
         Returns:
-            (纯文本内容, 变量名列表)
+            (纯文本内容, 变量名列表)  变量按模板中出现顺序排列
         """
         doc = Document(template_path)
         full_text = []
-        all_variables = set()
+        seen = set()
+        ordered_variables = []
 
         for paragraph in doc.paragraphs:
             text = paragraph.text
             full_text.append(text)
             variables = self.extract_variables(text)
-            all_variables.update(variables)
+            for v in variables:
+                if v not in seen:
+                    seen.add(v)
+                    ordered_variables.append(v)
 
         for table in doc.tables:
             for row in table.rows:
@@ -41,9 +45,12 @@ class TemplateParser:
                     text = cell.text
                     full_text.append(text)
                     variables = self.extract_variables(text)
-                    all_variables.update(variables)
+                    for v in variables:
+                        if v not in seen:
+                            seen.add(v)
+                            ordered_variables.append(v)
 
-        return "\n".join(full_text), sorted(list(all_variables))
+        return "\n".join(full_text), ordered_variables
 
     def extract_variables(self, text: str) -> List[str]:
         """
@@ -110,12 +117,13 @@ class TemplateParser:
             template_path: 模板文件路径
 
         Returns:
-            包含文本内容和变量信息的字典
+            包含文本内容和变量信息的字典，变量按模板中出现顺序排列
         """
         doc = Document(template_path)
         paragraphs = []
         tables = []
-        variables = set()
+        seen = set()
+        ordered_variables = []
 
         # 解析段落
         for para in doc.paragraphs:
@@ -124,7 +132,10 @@ class TemplateParser:
                 # 标记变量位置
                 preview_text = text
                 for match in self.pattern.finditer(text):
-                    variables.add(match.group(1).strip())
+                    v = match.group(1).strip()
+                    if v not in seen:
+                        seen.add(v)
+                        ordered_variables.append(v)
                 paragraphs.append({
                     "text": text,
                     "has_variable": bool(self.extract_variables(text))
@@ -139,7 +150,10 @@ class TemplateParser:
                     text = cell.text
                     if text.strip():
                         for match in self.pattern.finditer(text):
-                            variables.add(match.group(1).strip())
+                            v = match.group(1).strip()
+                            if v not in seen:
+                                seen.add(v)
+                                ordered_variables.append(v)
                         row_data.append({
                             "text": text,
                             "has_variable": bool(self.extract_variables(text))
@@ -152,6 +166,6 @@ class TemplateParser:
         return {
             "paragraphs": paragraphs,
             "tables": tables,
-            "variables": sorted(list(variables)),
-            "variable_count": len(variables)
+            "variables": ordered_variables,
+            "variable_count": len(ordered_variables)
         }
